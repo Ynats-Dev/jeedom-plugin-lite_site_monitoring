@@ -1,0 +1,25 @@
+{
+	"id" : "lite_site_monitoring",
+	"name" : "Lite Site Monitoring",
+	"description" : "Ce plugin permet de surveiller des urls distantes pour savoir s'ils sont en ligne ou non.",
+	"licence" : "AGPL",
+	"author" : "Ynats",
+        "require" : "3.3",
+	"category" : "monitoring",
+	"changelog" : "https://ynats.github.io\/jeedom-plugin-scan.ip\/#language#/changelog",
+	"documentation" : "https:\/\/ynats.github.io\/jeedom-plugin-scan.ip\/#language#/",
+	"link" : {
+		"forum":"https://community.jeedom.com/tag/plugin-scan_ip"
+	},
+	"language" : [
+            "fr_FR"
+        ],
+	"compatibility" : [
+			"miniplus",
+			"smart",
+			"rpi",
+			"docker",
+			"diy",
+			"v4"
+        ]
+}
