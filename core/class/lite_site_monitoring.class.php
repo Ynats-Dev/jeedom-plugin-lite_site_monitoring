@@ -85,7 +85,7 @@ class lite_site_monitoring extends eqLogic {
         return $return;
     }
    
-    public static function cron() {
+    public static function cron5() {
         log::add('lite_site_monitoring', 'debug', 'cron5 :. Lancement');
         $eqLogics = eqLogic::byType('lite_site_monitoring');
         foreach ($eqLogics as $eqlogic) {
