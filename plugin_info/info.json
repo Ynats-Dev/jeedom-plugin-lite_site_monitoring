@@ -6,10 +6,10 @@
 	"author" : "Ynats",
         "require" : "3.3",
 	"category" : "monitoring",
-	"changelog" : "https://ynats.github.io\/jeedom-plugin-scan.ip\/#language#/changelog",
-	"documentation" : "https:\/\/ynats.github.io\/jeedom-plugin-scan.ip\/#language#/",
+	"changelog" : "https://ynats.github.io\/jeedom-plugin-lite_site_monitoring\/#language#/changelog",
+	"documentation" : "https:\/\/ynats.github.io\/jeedom-plugin-lite_site_monitoring\/#language#/",
 	"link" : {
-		"forum":"https://community.jeedom.com/tag/plugin-scan_ip"
+		"forum":"https://community.jeedom.com/t/plugin-lsm-lite-site-monitoring/"
 	},
 	"language" : [
             "fr_FR"
