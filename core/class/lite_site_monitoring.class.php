@@ -20,33 +20,31 @@
 require_once __DIR__  . '/../../../../core/php/core.inc.php';
 
 class lite_site_monitoring extends eqLogic {
-    /*     * *************************Attributs****************************** */
-    
-  /*
-   * Permet de définir les possibilités de personnalisation du widget (en cas d'utilisation de la fonction 'toHtml' par exemple)
-   * Tableau multidimensionnel - exemple: array('custom' => true, 'custom::layout' => false)
-	public static $_widgetPossibility = array();
-   */
-    
+
     /*     * ***********************Methode static*************************** */
 
     public static function snif($_eqlogic) {
-        log::add('lite_site_monitoring', 'debug', 'snif :. Lancement');
+        log::add('lite_site_monitoring', 'debug', '---------------------------------------------------------------------------------------');
+        log::add('lite_site_monitoring', 'debug', 'snif :. Lancement pour #'.$_eqlogic->getId());
+        $last_snif = date("d/m/Y H:i:s");
         
         $url = $_eqlogic->getConfiguration("url");
         $curl = array();
-        $curl[1] = self::getCurlLatence($url);
-        $curl[1]["online"] = self::getCurl($url);
-        $curl[1]["url"] = $url;
+        $curl = self::getCurlLatence($url);
+        $curl["online"] = self::getCurl($url);
+        $curl["url"] = $url;
+        $curl["last_snif"] = $last_snif;
         
         log::add('lite_site_monitoring', 'debug', 'snif :. checkAndUpdateCmd');
-        $_eqlogic->checkAndUpdateCmd('online', $curl[1]["online"]);
-        $_eqlogic->checkAndUpdateCmd('dns_resolution', $curl[1]["dns_resolution"]);
-        $_eqlogic->checkAndUpdateCmd('tcp_established', $curl[1]["tcp_established"]);
-        $_eqlogic->checkAndUpdateCmd('ssl_handshake_done', $curl[1]["ssl_handshake_done"]);
-        $_eqlogic->checkAndUpdateCmd('TTFB', $curl[1]["TTFB"]);
-        $_eqlogic->checkAndUpdateCmd('latence', $curl[1]["latence"]);
+        $_eqlogic->checkAndUpdateCmd('online', $curl["online"]);
+        $_eqlogic->checkAndUpdateCmd('dns_resolution', $curl["dns_resolution"]);
+        $_eqlogic->checkAndUpdateCmd('tcp_established', $curl["tcp_established"]);
+        $_eqlogic->checkAndUpdateCmd('ssl_handshake_done', $curl["ssl_handshake_done"]);
+        $_eqlogic->checkAndUpdateCmd('TTFB', $curl["TTFB"]);
+        $_eqlogic->checkAndUpdateCmd('latence', $curl["latence"]);
+        $_eqlogic->checkAndUpdateCmd('last_snif', $curl["last_snif"]);
         
+        log::add('lite_site_monitoring', 'debug', '---------------------------------------------------------------------------------------');
     }
 
     public static function getCurl($_url){
@@ -82,7 +80,6 @@ class lite_site_monitoring extends eqLogic {
         $eqLogics = eqLogic::byType('lite_site_monitoring');
         foreach ($eqLogics as $eqlogic) {
             if ($eqlogic->getIsEnable() == 1) {
-                log::add('lite_site_monitoring', 'debug', 'cron5 :. #ID#' . $eqlogic->getId());
                 self::snif($eqlogic);
             }
         }
@@ -177,6 +174,18 @@ class lite_site_monitoring extends eqLogic {
         $cmd->setSubType('string');
         $cmd->setEqLogic_id($this->getId());
         $cmd->save();
+        
+        $cmd = $this->getCmd(null, 'last_snif');
+        if (!is_object($cmd)) {
+            $cmd = new lite_site_monitoringCmd();
+            $cmd->setLogicalId('last_snif');
+            $cmd->setName(__('Maj', __FILE__));
+            $cmd->setIsVisible(1);
+        }
+        $cmd->setType('info');
+        $cmd->setSubType('string');
+        $cmd->setEqLogic_id($this->getId());
+        $cmd->save();
     }
 
     /*     * **********************Getteur Setteur*************************** */
@@ -208,7 +217,6 @@ class lite_site_monitoringCmd extends cmd {
             case 'refresh': // LogicalId de la commande rafraîchir que l’on a créé dans la méthode Postsave 
                 log::add('lite_site_monitoring', 'debug', 'Commande :. Lancement : #ID#' . $eqlogic->getId());
                 lite_site_monitoring::snif($eqlogic);
-                log::add('lite_site_monitoring', 'debug', '---------------------------------------------------------------------------------------');
                 break;
         }
      }
