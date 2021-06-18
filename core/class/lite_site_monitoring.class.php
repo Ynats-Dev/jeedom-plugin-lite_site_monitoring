@@ -80,7 +80,8 @@ class lite_site_monitoring extends eqLogic {
         $eqLogics = eqLogic::byType('lite_site_monitoring');
         foreach ($eqLogics as $eqlogic) {
             if ($eqlogic->getIsEnable() == 1) {
-                self::snif($eqlogic);
+                $cmd = $eqLogics->getCmd(null, 'refresh');
+                $cmd->execCmd();
             }
         }
     }
