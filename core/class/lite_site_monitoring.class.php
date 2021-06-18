@@ -76,10 +76,10 @@ class lite_site_monitoring extends eqLogic {
         $cpt = 0;
         foreach ($output as $search) {
             $tmp = explode("|", $search);
-            $return[$tmp[0]] = $tmp[1];
+            $return[$tmp[0]] = number_format($tmp[1], 6, '.', '');
             $cpt = floatval($tmp[1]) + $cpt;
         }
-        $return["latence"] = strval($cpt);
+        $return["latence"] = number_format($cpt, 6, '.', '');
         return $return;
     }
    
