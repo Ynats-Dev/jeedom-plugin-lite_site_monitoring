@@ -44,6 +44,14 @@ class lite_site_monitoring extends eqLogic {
         $_eqlogic->checkAndUpdateCmd('latence', $curl["latence"]);
         $_eqlogic->checkAndUpdateCmd('last_snif', $curl["last_snif"]);
         
+        log::add('lite_site_monitoring', 'debug', 'snif :. online : '.$curl["online"]);
+        log::add('lite_site_monitoring', 'debug', 'snif :. dns_resolution : '.$curl["dns_resolution"]);
+        log::add('lite_site_monitoring', 'debug', 'snif :. tcp_established : '.$curl["tcp_established"]);
+        log::add('lite_site_monitoring', 'debug', 'snif :. ssl_handshake_done : '.$curl["ssl_handshake_done"]);
+        log::add('lite_site_monitoring', 'debug', 'snif :. TTFB : '.$curl["TTFB"]);
+        log::add('lite_site_monitoring', 'debug', 'snif :. latence : '.$curl["latence"]);
+        log::add('lite_site_monitoring', 'debug', 'snif :. last_snif : '.$curl["last_snif"]);
+        
         log::add('lite_site_monitoring', 'debug', '---------------------------------------------------------------------------------------');
     }
 
