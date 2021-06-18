@@ -74,12 +74,14 @@ class lite_site_monitoring extends eqLogic {
         exec('curl -w "dns_resolution|%{time_namelookup}\ntcp_established|%{time_connect}\nssl_handshake_done|%{time_appconnect}\nTTFB|%{time_starttransfer}\n" -o /dev/null -s '.$_url, $output);
         $return = array();
         $cpt = 0;
+        
         foreach ($output as $search) {
+            $search = str_replace(",", ".", $search); 
             $tmp = explode("|", $search);
-            $return[$tmp[0]] = number_format(floatval($tmp[1]), 6, '.', '');
-            $cpt = floatval($tmp[1]) + $cpt;
+            $return[$tmp[0]] = $tmp[1];
+            $cpt = $tmp[1] + $cpt;
         }
-        $return["latence"] = number_format($cpt, 6, '.', '');
+        $return["latence"] = $cpt;
         return $return;
     }
    
@@ -88,7 +90,7 @@ class lite_site_monitoring extends eqLogic {
         $eqLogics = eqLogic::byType('lite_site_monitoring');
         foreach ($eqLogics as $eqlogic) {
             if ($eqlogic->getIsEnable() == 1) {
-                self::snif($eqlogic->getEqLogic());
+                self::snif($eqlogic);
             }
         }
     }
