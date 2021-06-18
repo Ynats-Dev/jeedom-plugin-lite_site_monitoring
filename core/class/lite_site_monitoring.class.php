@@ -76,19 +76,19 @@ class lite_site_monitoring extends eqLogic {
         $cpt = 0;
         foreach ($output as $search) {
             $tmp = explode("|", $search);
-            $return[$tmp[0]] = number_format($tmp[1], 6, '.', '');
+            $return[$tmp[0]] = number_format(floatval($tmp[1]), 6, '.', '');
             $cpt = floatval($tmp[1]) + $cpt;
         }
         $return["latence"] = number_format($cpt, 6, '.', '');
         return $return;
     }
    
-    public static function cron5() {
+    public static function cron() {
         log::add('lite_site_monitoring', 'debug', 'cron5 :. Lancement');
         $eqLogics = eqLogic::byType('lite_site_monitoring');
         foreach ($eqLogics as $eqlogic) {
             if ($eqlogic->getIsEnable() == 1) {
-                self::snif($eqlogic);
+                self::snif($eqlogic->getEqLogic());
             }
         }
     }
