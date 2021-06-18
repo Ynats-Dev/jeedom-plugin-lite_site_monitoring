@@ -1,7 +1,7 @@
 {
 	"id" : "lite_site_monitoring",
 	"name" : "Lite Site Monitoring",
-	"description" : "Ce plugin permet de surveiller des urls distantes pour savoir s'ils sont en ligne ou non.",
+	"description" : "Ce plugin permet de surveiller des urls distantes pour savoir si celles-ci sont en ligne ou non.",
 	"licence" : "AGPL",
 	"author" : "Ynats",
         "require" : "3.3",
