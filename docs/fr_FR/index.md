@@ -1,3 +1,4 @@
-# Plugin template
+# Plugin Jeedom Lite Site Monitoring
 
-La documentation pour utiliser le template de plugin se trouve [ici](https://doc.jeedom.com/fr_FR/dev/)
+Ce plugin permet de surveiller des urls distantes pour savoir s'ils sont en ligne ou non.
+
