@@ -28,12 +28,29 @@ class lite_site_monitoring extends eqLogic {
         log::add('lite_site_monitoring', 'debug', 'snif :. Lancement pour #'.$_eqlogic->getId());
         $last_snif = date("d/m/Y H:i:s");
         
-        $url = $_eqlogic->getConfiguration("url");
-        $curl = array();
-        $curl = self::getCurlLatence($url);
-        $curl["online"] = self::getCurl($url);
-        $curl["url"] = $url;
-        $curl["last_snif"] = $last_snif;
+        // Vérifier d'abord si l'accès à internet est disponible
+        $internet_access = self::checkInternetAccess();
+        log::add('lite_site_monitoring', 'debug', 'snif :. internet_access : '.$internet_access);
+        
+        if (!$internet_access) {
+            log::add('lite_site_monitoring', 'warn', 'snif :. Pas d\'accès à internet détecté. Arrêt du test.');
+            $curl = array();
+            $curl["online"] = FALSE;
+            $curl["dns_resolution"] = "N/A";
+            $curl["tcp_established"] = "N/A";
+            $curl["ssl_handshake_done"] = "N/A";
+            $curl["TTFB"] = "N/A";
+            $curl["latence"] = "N/A";
+            $curl["url"] = $_eqlogic->getConfiguration("url");
+            $curl["last_snif"] = $last_snif;
+        } else {
+            $url = $_eqlogic->getConfiguration("url");
+            $curl = array();
+            $curl = self::getCurlLatence($url);
+            $curl["online"] = self::getCurl($url);
+            $curl["url"] = $url;
+            $curl["last_snif"] = $last_snif;
+        }
         
         log::add('lite_site_monitoring', 'debug', 'snif :. checkAndUpdateCmd');
         $_eqlogic->checkAndUpdateCmd('online', $curl["online"]);
@@ -53,6 +70,26 @@ class lite_site_monitoring extends eqLogic {
         log::add('lite_site_monitoring', 'debug', 'snif :. last_snif : '.$curl["last_snif"]);
         
         log::add('lite_site_monitoring', 'debug', '---------------------------------------------------------------------------------------');
+    }
+
+    public static function checkInternetAccess() {
+        log::add('lite_site_monitoring', 'debug', 'checkInternetAccess :. Vérification de l\'accès à internet');
+        
+        // Teste la résolution DNS via Google DNS (8.8.8.8) et Cloudflare DNS (1.1.1.1)
+        exec("curl -m 5 -I https://8.8.8.8 2>&1", $output_google, $return_code_google);
+        
+        // Si Google DNS ne répond pas, essaye Cloudflare
+        if ($return_code_google !== 0) {
+            exec("curl -m 5 -I https://1.1.1.1 2>&1", $output_cloudflare, $return_code_cloudflare);
+            
+            if ($return_code_cloudflare !== 0) {
+                log::add('lite_site_monitoring', 'debug', 'checkInternetAccess :. Pas d\'accès à internet détecté');
+                return FALSE;
+            }
+        }
+        
+        log::add('lite_site_monitoring', 'debug', 'checkInternetAccess :. Accès à internet confirmé');
+        return TRUE;
     }
 
     public static function getCurl($_url){
