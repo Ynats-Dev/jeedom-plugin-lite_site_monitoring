@@ -19,17 +19,32 @@
 require_once dirname(__FILE__) . '/../../../core/php/core.inc.php';
 
 // Fonction exécutée automatiquement après l'installation du plugin
-  function template_install() {
+  function lite_site_monitoring_install() {
 
   }
 
 // Fonction exécutée automatiquement après la mise à jour du plugin
-  function template_update() {
-
+  function lite_site_monitoring_update() {
+    // Ré-enregistre chaque équipement pour créer ou mettre à jour ses commandes
+    foreach (eqLogic::byType('lite_site_monitoring') as $eqLogic) {
+      try {
+        // Anciennes mesures de temps en texte (secondes) : historique vidé avant le passage en numérique (ms)
+        foreach (array_keys(lite_site_monitoring::TIMINGS) as $logicalId) {
+          $cmd = $eqLogic->getCmd('info', $logicalId);
+          if (is_object($cmd) && $cmd->getSubType() == 'string') {
+            $cmd->emptyHistory();
+            log::add('lite_site_monitoring', 'info', $eqLogic->getHumanName() . ' : historique de ' . $cmd->getName() . ' vidé (passage en millisecondes)');
+          }
+        }
+        $eqLogic->save();
+      } catch (Exception $e) {
+        log::add('lite_site_monitoring', 'error', $eqLogic->getHumanName() . ' : ' . $e->getMessage());
+      }
+    }
   }
 
 // Fonction exécutée automatiquement après la suppression du plugin
-  function template_remove() {
+  function lite_site_monitoring_remove() {
 
   }
 

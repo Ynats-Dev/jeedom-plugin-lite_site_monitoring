@@ -1,25 +1,39 @@
 {
-	"id" : "lite_site_monitoring",
-	"name" : "Lite Site Monitoring",
-	"description" : "Ce plugin permet de surveiller des urls distantes pour savoir si celles-ci sont en ligne ou non.",
-	"licence" : "AGPL",
-	"author" : "Ynats",
-        "require" : "3.3",
-	"category" : "monitoring",
-	"changelog" : "https://ynats.github.io\/jeedom-plugin-lite_site_monitoring\/#language#/changelog",
-	"documentation" : "https:\/\/ynats.github.io\/jeedom-plugin-lite_site_monitoring\/#language#/",
-	"link" : {
-		"forum":"https://community.jeedom.com/t/plugin-lsm-lite-site-monitoring/"
+	"id": "lite_site_monitoring",
+	"name": "Lite Site Monitoring",
+	"pluginVersion": "1.0.0",
+	"description": {
+		"fr_FR": "Surveillez vos sites web depuis Jeedom : état en ligne ou hors ligne, temps de réponse, code HTTP, mot-clé attendu dans la page et expiration du certificat SSL. Contrôles en parallèle à la fréquence de votre choix, alerte après un nombre d'échecs réglable, sans fausse alerte quand Jeedom perd l'accès à Internet.",
+		"en_US": "Monitor your websites from Jeedom: online or offline state, response time, HTTP code, expected keyword in the page and SSL certificate expiry. Checks run in parallel at the frequency of your choice, with an alert after a configurable number of failures and no false alert when Jeedom loses Internet access.",
+		"de_DE": "Überwachen Sie Ihre Websites aus Jeedom: Online- oder Offline-Zustand, Antwortzeit, HTTP-Code, erwartetes Schlüsselwort auf der Seite und Ablauf des SSL-Zertifikats. Parallele Prüfungen in der Häufigkeit Ihrer Wahl, Alarm nach einer einstellbaren Anzahl von Fehlschlägen und kein Fehlalarm, wenn Jeedom den Internetzugang verliert.",
+		"es_ES": "Supervise sus sitios web desde Jeedom: estado en línea o fuera de línea, tiempo de respuesta, código HTTP, palabra clave esperada en la página y caducidad del certificado SSL. Comprobaciones en paralelo con la frecuencia que elija, alerta tras un número configurable de fallos y sin falsas alertas cuando Jeedom pierde el acceso a Internet.",
+		"it_IT": "Monitora i tuoi siti web da Jeedom: stato online o offline, tempo di risposta, codice HTTP, parola chiave attesa nella pagina e scadenza del certificato SSL. Controlli in parallelo alla frequenza che preferisci, allarme dopo un numero configurabile di errori e nessun falso allarme quando Jeedom perde l'accesso a Internet."
 	},
-	"language" : [
-            "fr_FR"
-        ],
-	"compatibility" : [
-			"miniplus",
-			"smart",
-			"rpi",
-			"docker",
-			"diy",
-			"v4"
-        ]
+	"licence": "AGPL",
+	"author": "Ynats",
+	"require": "4.2",
+	"category": "monitoring",
+	"hasDependency": false,
+	"hasOwnDeamon": false,
+	"maxDependancyInstallTime": 0,
+	"changelog": "https://github.com/Ynats-Dev/jeedom-plugin-lite_site_monitoring/blob/stable/docs/#language#/changelog.md",
+	"documentation": "https://github.com/Ynats-Dev/jeedom-plugin-lite_site_monitoring/blob/stable/docs/#language#/index.md",
+	"link": {
+		"forum": "https://community.jeedom.com/t/plugin-lsm-lite-site-monitoring/"
+	},
+	"language": [
+		"fr_FR",
+		"en_US",
+		"es_ES",
+		"it_IT",
+		"de_DE"
+	],
+	"compatibility": [
+		"smart",
+		"luna",
+		"atlas",
+		"rpi",
+		"docker",
+		"diy"
+	]
 }

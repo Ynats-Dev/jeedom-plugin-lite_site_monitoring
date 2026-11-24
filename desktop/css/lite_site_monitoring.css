@@ -1,0 +1,107 @@
+/* Cartes de la page du plugin : voyant d'état et site surveillé */
+.lsm-card {
+  position: relative;
+}
+.lsm-card .lsm-card-status {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: #8a939b;
+  box-shadow: 0 0 0 3px rgba(138, 147, 155, .2);
+}
+.lsm-card .lsm-card-status.lsm-up {
+  background: #2e9d5b;
+  box-shadow: 0 0 0 3px rgba(46, 157, 91, .2);
+}
+.lsm-card .lsm-card-status.lsm-down {
+  background: #d64545;
+  box-shadow: 0 0 0 3px rgba(214, 69, 69, .2);
+}
+.lsm-card .lsm-card-host {
+  display: block;
+  font-size: .8em;
+  opacity: .6;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* Résumé de l'état du site dans l'onglet Équipement */
+.lsm-panel {
+  max-width: 460px;
+  margin: 6px auto 0;
+  padding: 16px 18px;
+  border-radius: 10px;
+  background: rgba(127, 127, 127, .06);
+  border: 1px solid rgba(127, 127, 127, .15);
+}
+.lsm-panel-head {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  margin-bottom: 14px;
+}
+.lsm-panel-head img {
+  width: 56px;
+  height: 56px;
+  border-radius: 12px;
+}
+.lsm-panel-pill {
+  --lsm-color: #8a939b;
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  padding: 3px 12px;
+  border-radius: 999px;
+  font-weight: 600;
+  color: var(--lsm-color);
+  background: rgba(138, 147, 155, .15);
+}
+.lsm-panel-pill.lsm-up {
+  --lsm-color: #2e9d5b;
+  background: rgba(46, 157, 91, .14);
+}
+.lsm-panel-pill.lsm-down {
+  --lsm-color: #d64545;
+  background: rgba(214, 69, 69, .14);
+}
+.lsm-panel-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--lsm-color);
+}
+.lsm-panel-host {
+  margin-top: 4px;
+  opacity: .65;
+  word-break: break-all;
+}
+.lsm-panel-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+}
+.lsm-panel-grid > div {
+  padding: 8px 10px;
+  border-radius: 8px;
+  background: rgba(127, 127, 127, .08);
+}
+.lsm-panel-grid span {
+  display: block;
+  font-size: .8em;
+  opacity: .65;
+}
+.lsm-panel-grid strong {
+  font-size: 1.15em;
+  font-weight: 600;
+}
+.lsm-panel-error:not(:empty) {
+  margin-top: 12px;
+  padding: 8px 10px;
+  border-radius: 8px;
+  color: #d64545;
+  background: rgba(214, 69, 69, .1);
+}

@@ -1,0 +1,116 @@
+<div class="eqLogic eqLogic-widget allowResize lite_site_monitoring #class#" data-eqType="#eqType#" data-eqLogic_id="#id#" data-eqLogic_uid="#uid#" data-version="#version#" data-translate-category="#translate_category#" data-category="#category#" data-tags="#tags#" style="width: #width#;height: #height#;#style#">
+	<div class="text-center widget-name">
+		<span class="lsm-refresh pull-right cursor" title="{{Rafraîchir}}"><i class="fas fa-sync-alt"></i></span>
+		<span class="reportModeVisible">#name_display# <span class="object_name">#object_name#</span></span>
+		<a href="#eqLink#" class="reportModeHidden">#name_display# <span class="object_name">#object_name#</span></a>
+	</div>
+	<div class="lsm-body" title="#lsm_url#">
+		<div class="lsm-host">#lsm_host#</div>
+		<div class="lsm-pill"><span class="lsm-dot"></span><span class="lsm-label"></span></div>
+		<div class="lsm-metric">
+			<span class="lsm-latency">-</span><span class="lsm-unit">ms</span>
+		</div>
+		<div class="lsm-chips">
+			<span class="lsm-chip lsm-ssl" title="{{Expiration du certificat}}"><i class="fas fa-lock"></i> <span></span></span>
+			<span class="lsm-chip lsm-code" title="{{Code HTTP}}">HTTP <span></span></span>
+		</div>
+		<div class="lsm-error"></div>
+		<div class="lsm-date"><i class="far fa-clock"></i> <span></span></div>
+	</div>
+	<style>
+		.lite_site_monitoring .lsm-refresh { opacity: .55; transition: opacity .2s; }
+		.lite_site_monitoring .lsm-refresh:hover { opacity: 1; }
+		.lite_site_monitoring .lsm-refresh.lsm-spin i { animation: lsm-spin 1s linear infinite; }
+		@keyframes lsm-spin { to { transform: rotate(360deg); } }
+		.lite_site_monitoring .lsm-body { display: flex; flex-direction: column; align-items: center; gap: 6px; padding: 6px 10px 10px; text-align: center; }
+		.lite_site_monitoring .lsm-host { font-size: .8em; opacity: .6; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+		.lite_site_monitoring .lsm-pill { --lsm-color: #8a939b; display: inline-flex; align-items: center; gap: 7px; padding: 3px 12px; border-radius: 999px; font-weight: 600; font-size: .95em; color: var(--lsm-color); background: color-mix(in srgb, var(--lsm-color) 14%, transparent); }
+		.lite_site_monitoring .lsm-pill.lsm-up { --lsm-color: #2e9d5b; }
+		.lite_site_monitoring .lsm-pill.lsm-down { --lsm-color: #d64545; }
+		.lite_site_monitoring .lsm-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--lsm-color); }
+		.lite_site_monitoring .lsm-up .lsm-dot { box-shadow: 0 0 0 0 var(--lsm-color); animation: lsm-pulse 2.4s ease-out infinite; }
+		@keyframes lsm-pulse { 0% { box-shadow: 0 0 0 0 color-mix(in srgb, var(--lsm-color) 60%, transparent); } 70%, 100% { box-shadow: 0 0 0 7px transparent; } }
+		.lite_site_monitoring .lsm-metric { line-height: 1; margin-top: 2px; }
+		.lite_site_monitoring .lsm-latency { font-size: 2.1em; font-weight: 300; letter-spacing: -.02em; font-variant-numeric: tabular-nums; }
+		.lite_site_monitoring .lsm-unit { font-size: .85em; opacity: .6; margin-left: 3px; }
+		.lite_site_monitoring .lsm-chips { display: flex; gap: 6px; flex-wrap: wrap; justify-content: center; }
+		.lite_site_monitoring .lsm-chip { display: none; padding: 1px 8px; border-radius: 6px; font-size: .78em; background: rgba(127, 127, 127, .14); }
+		.lite_site_monitoring .lsm-chip.lsm-show { display: inline-block; }
+		.lite_site_monitoring .lsm-chip.lsm-warn { color: #b7791f; background: rgba(236, 160, 40, .16); }
+		.lite_site_monitoring .lsm-chip.lsm-alert { color: #d64545; background: rgba(214, 69, 69, .14); }
+		.lite_site_monitoring .lsm-error { display: none; color: #d64545; font-size: .8em; line-height: 1.3; word-break: break-word; }
+		.lite_site_monitoring .lsm-error.lsm-show { display: block; }
+		.lite_site_monitoring .lsm-date { font-size: .75em; opacity: .55; }
+	</style>
+	<script>
+		(function () {
+			var root = document.querySelector('.eqLogic[data-eqLogic_uid="#uid#"]');
+			if (!root) return;
+			var ids = #lsm_ids#;
+			var state = #lsm_state#;
+			var el = function (selector) { return root.querySelector(selector); };
+			var empty = function (value) { return value === '' || value === null || value === undefined; };
+			var chip = function (selector, text, level) {
+				var node = el(selector);
+				node.classList.remove('lsm-show', 'lsm-warn', 'lsm-alert');
+				if (text === null) return;
+				node.querySelector('span').textContent = text;
+				node.classList.add('lsm-show');
+				if (level) node.classList.add(level);
+			};
+
+			var render = {
+				online: function (value) {
+					var pill = el('.lsm-pill');
+					pill.classList.remove('lsm-up', 'lsm-down');
+					if (empty(value)) {
+						el('.lsm-label').textContent = '{{Inconnu}}';
+					} else if (value == 1) {
+						pill.classList.add('lsm-up');
+						el('.lsm-label').textContent = '{{En ligne}}';
+					} else {
+						pill.classList.add('lsm-down');
+						el('.lsm-label').textContent = '{{Hors ligne}}';
+					}
+				},
+				latence: function (value) {
+					el('.lsm-latency').textContent = empty(value) ? '-' : Math.round(value);
+				},
+				ssl_days: function (value) {
+					if (empty(value)) return chip('.lsm-ssl', null);
+					chip('.lsm-ssl', value + ' {{j}}', value < 7 ? 'lsm-alert' : (value < 30 ? 'lsm-warn' : ''));
+				},
+				http_code: function (value) {
+					if (empty(value) || value == 0) return chip('.lsm-code', null);
+					chip('.lsm-code', value, value >= 400 ? 'lsm-alert' : '');
+				},
+				error: function (value) {
+					var node = el('.lsm-error');
+					node.textContent = value || '';
+					node.classList.toggle('lsm-show', !empty(value));
+				},
+				last_snif: function (value) {
+					el('.lsm-date span').textContent = value || '';
+					el('.lsm-refresh').classList.remove('lsm-spin');
+				}
+			};
+
+			Object.keys(render).forEach(function (logicalId) {
+				if (!ids[logicalId]) return;
+				var update = function (options) { render[logicalId](options.display_value); };
+				if (typeof jeedom.cmd.addUpdateFunction === 'function') {
+					jeedom.cmd.addUpdateFunction(ids[logicalId], update);
+				} else {
+					jeedom.cmd.update[ids[logicalId]] = update;
+				}
+				render[logicalId](state[logicalId]);
+			});
+
+			el('.lsm-refresh').addEventListener('click', function () {
+				if (!ids.refresh) return;
+				this.classList.add('lsm-spin');
+				jeedom.cmd.execute({ id: ids.refresh });
+			});
+		})();
+	</script>
+</div>

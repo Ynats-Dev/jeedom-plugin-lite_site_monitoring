@@ -16,6 +16,43 @@
  */
 
 
+/* Résumé de l'état du site dans l'onglet Équipement */
+function printEqLogic(_eqLogic) {
+  var panel = document.querySelector('.lsm-panel');
+  if (!panel) return;
+  var state = {};
+  (_eqLogic.cmd || []).forEach(function (cmd) {
+    state[cmd.logicalId] = cmd.state;
+  });
+  var set = function (key, text) {
+    panel.querySelector('[data-lsm=' + key + ']').textContent = text;
+  };
+  var empty = function (value) {
+    return value === undefined || value === null || value === '';
+  };
+
+  var url = (_eqLogic.configuration && _eqLogic.configuration.url) || '';
+  set('host', url.replace(/^[a-z]+:\/\//i, '').replace(/\/$/, ''));
+
+  var pill = panel.querySelector('[data-lsm=online]');
+  pill.classList.remove('lsm-up', 'lsm-down');
+  if (empty(state.online)) {
+    panel.querySelector('.lsm-panel-label').textContent = '{{Jamais contrôlé}}';
+  } else if (state.online == 1) {
+    pill.classList.add('lsm-up');
+    panel.querySelector('.lsm-panel-label').textContent = '{{En ligne}}';
+  } else {
+    pill.classList.add('lsm-down');
+    panel.querySelector('.lsm-panel-label').textContent = '{{Hors ligne}}';
+  }
+
+  set('latence', empty(state.latence) ? '-' : Math.round(state.latence) + ' ms');
+  set('http_code', empty(state.http_code) || state.http_code == 0 ? '-' : state.http_code);
+  set('ssl_days', empty(state.ssl_days) ? '-' : state.ssl_days + ' {{jours}}');
+  set('last_snif', empty(state.last_snif) ? '-' : state.last_snif);
+  set('error', empty(state.error) ? '' : state.error);
+}
+
 /* Permet la réorganisation des commandes dans l'équipement */
 $("#table_cmd").sortable({
   axis: "y",
@@ -29,7 +66,7 @@ $("#table_cmd").sortable({
 /* Fonction permettant l'affichage des commandes dans l'équipement */
 function addCmdToTable(_cmd) {
   if (!isset(_cmd)) {
-     var _cmd = {configuration: {}};
+     _cmd = {configuration: {}};
    }
    if (!isset(_cmd.configuration)) {
      _cmd.configuration = {};
@@ -74,7 +111,7 @@ function addCmdToTable(_cmd) {
    tr += '<i class="fas fa-minus-circle pull-right cmdAction cursor" data-action="remove"></i></td>';
    tr += '</tr>';
    $('#table_cmd tbody').append(tr);
-   var tr = $('#table_cmd tbody tr').last();
+   tr = $('#table_cmd tbody tr').last();
    jeedom.eqLogic.builSelectCmd({
      id:  $('.eqLogicAttr[data-l1key=id]').value(),
      filter: {type: 'info'},

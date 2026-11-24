@@ -21,254 +21,397 @@ require_once __DIR__  . '/../../../../core/php/core.inc.php';
 
 class lite_site_monitoring extends eqLogic {
 
-    /*     * ***********************Methode static*************************** */
+    const LOG = 'lite_site_monitoring';
 
-    public static function snif($_eqlogic) {
-        log::add('lite_site_monitoring', 'debug', '---------------------------------------------------------------------------------------');
-        log::add('lite_site_monitoring', 'debug', 'snif :. Lancement pour #'.$_eqlogic->getId());
-        $last_snif = date("d/m/Y H:i:s");
-        
-        // Vérifier d'abord si l'accès à internet est disponible
-        $internet_access = self::checkInternetAccess();
-        log::add('lite_site_monitoring', 'debug', 'snif :. internet_access : '.$internet_access);
-        
-        if (!$internet_access) {
-            log::add('lite_site_monitoring', 'warn', 'snif :. Pas d\'accès à internet détecté. Arrêt du test.');
-            $curl = array();
-            $curl["online"] = FALSE;
-            $curl["dns_resolution"] = "N/A";
-            $curl["tcp_established"] = "N/A";
-            $curl["ssl_handshake_done"] = "N/A";
-            $curl["TTFB"] = "N/A";
-            $curl["latence"] = "N/A";
-            $curl["url"] = $_eqlogic->getConfiguration("url");
-            $curl["last_snif"] = $last_snif;
-        } else {
-            $url = $_eqlogic->getConfiguration("url");
-            $curl = array();
-            $curl = self::getCurlLatence($url);
-            $curl["online"] = self::getCurl($url);
-            $curl["url"] = $url;
-            $curl["last_snif"] = $last_snif;
+    /** Délai maximal d'établissement de connexion (secondes). */
+    const CONNECT_TIMEOUT = 10;
+
+    /** Délai maximal d'une requête complète (secondes). */
+    const REQUEST_TIMEOUT = 20;
+
+    /** Taille maximale de page conservée pour la recherche du mot-clé (octets). */
+    const MAX_BODY_SIZE = 1048576;
+
+    /** Fréquence de contrôle par défaut. */
+    const DEFAULT_CRON = '*/5 * * * *';
+
+    /** Hôtes interrogés pour vérifier l'accès à Internet. */
+    const INTERNET_PROBES = array('https://1.1.1.1', 'https://8.8.8.8');
+
+    /** Mesures de temps : logicalId de la commande => option curl_getinfo (secondes, converties en ms). */
+    const TIMINGS = array(
+        'dns_resolution'     => CURLINFO_NAMELOOKUP_TIME,
+        'tcp_established'    => CURLINFO_CONNECT_TIME,
+        'ssl_handshake_done' => CURLINFO_APPCONNECT_TIME,
+        'TTFB'               => CURLINFO_STARTTRANSFER_TIME,
+        'latence'            => CURLINFO_TOTAL_TIME,
+    );
+
+    /*     * ***********************Méthodes statiques*************************** */
+
+    public static function cron() {
+        $due = array_filter(eqLogic::byType(self::LOG, true), function ($eqLogic) {
+            return $eqLogic->isDue();
+        });
+        if (count($due) > 0) {
+            self::checkAll($due);
         }
-        
-        log::add('lite_site_monitoring', 'debug', 'snif :. checkAndUpdateCmd');
-        $_eqlogic->checkAndUpdateCmd('online', $curl["online"]);
-        $_eqlogic->checkAndUpdateCmd('dns_resolution', $curl["dns_resolution"]);
-        $_eqlogic->checkAndUpdateCmd('tcp_established', $curl["tcp_established"]);
-        $_eqlogic->checkAndUpdateCmd('ssl_handshake_done', $curl["ssl_handshake_done"]);
-        $_eqlogic->checkAndUpdateCmd('TTFB', $curl["TTFB"]);
-        $_eqlogic->checkAndUpdateCmd('latence', $curl["latence"]);
-        $_eqlogic->checkAndUpdateCmd('last_snif', $curl["last_snif"]);
-        
-        log::add('lite_site_monitoring', 'debug', 'snif :. online : '.$curl["online"]);
-        log::add('lite_site_monitoring', 'debug', 'snif :. dns_resolution : '.$curl["dns_resolution"]);
-        log::add('lite_site_monitoring', 'debug', 'snif :. tcp_established : '.$curl["tcp_established"]);
-        log::add('lite_site_monitoring', 'debug', 'snif :. ssl_handshake_done : '.$curl["ssl_handshake_done"]);
-        log::add('lite_site_monitoring', 'debug', 'snif :. TTFB : '.$curl["TTFB"]);
-        log::add('lite_site_monitoring', 'debug', 'snif :. latence : '.$curl["latence"]);
-        log::add('lite_site_monitoring', 'debug', 'snif :. last_snif : '.$curl["last_snif"]);
-        
-        log::add('lite_site_monitoring', 'debug', '---------------------------------------------------------------------------------------');
     }
 
+    /**
+     * Contrôle plusieurs équipements en parallèle et met à jour leurs commandes.
+     *
+     * @param lite_site_monitoring[] $_eqLogics
+     */
+    public static function checkAll(array $_eqLogics) {
+        $targets = array();
+        $internetAccess = null;
+
+        foreach ($_eqLogics as $eqLogic) {
+            if ($eqLogic->getConfiguration('url') == '') {
+                log::add(self::LOG, 'warning', 'Aucune URL configurée pour ' . $eqLogic->getHumanName());
+                continue;
+            }
+            if ($eqLogic->getConfiguration('internal') != 1) {
+                // Un seul test d'accès à Internet par passage, et seulement si nécessaire
+                if ($internetAccess === null) {
+                    $internetAccess = self::checkInternetAccess();
+                }
+                $eqLogic->checkAndUpdateCmd('internet', $internetAccess ? 1 : 0);
+                if (!$internetAccess) {
+                    // Sans Internet, le résultat ne dirait rien du site : on garde le dernier état connu
+                    log::add(self::LOG, 'warning', 'Pas d\'accès à Internet, contrôle de ' . $eqLogic->getHumanName() . ' reporté');
+                    continue;
+                }
+            }
+            $targets[$eqLogic->getId()] = $eqLogic;
+        }
+        if (count($targets) == 0) {
+            return;
+        }
+
+        $results = self::probeAll($targets);
+
+        // Nouvel essai immédiat des échecs, pour écarter les erreurs passagères
+        $failed = array_filter($results, function ($result) {
+            return !$result['ok'];
+        });
+        if (count($failed) > 0) {
+            log::add(self::LOG, 'debug', 'checkAll :. Nouvel essai pour ' . count($failed) . ' site(s)');
+            $results = array_replace($results, self::probeAll(array_intersect_key($targets, $failed)));
+        }
+
+        foreach ($results as $id => $result) {
+            $targets[$id]->applyResult($result);
+        }
+    }
+
+    /**
+     * Vérifie que Jeedom a accès à Internet en interrogeant des hôtes publics connus.
+     */
     public static function checkInternetAccess() {
-        log::add('lite_site_monitoring', 'debug', 'checkInternetAccess :. Vérification de l\'accès à internet');
-        
-        // Teste la résolution DNS via Google DNS (8.8.8.8) et Cloudflare DNS (1.1.1.1)
-        exec("curl -m 5 -I https://8.8.8.8 2>&1", $output_google, $return_code_google);
-        
-        // Si Google DNS ne répond pas, essaye Cloudflare
-        if ($return_code_google !== 0) {
-            exec("curl -m 5 -I https://1.1.1.1 2>&1", $output_cloudflare, $return_code_cloudflare);
-            
-            if ($return_code_cloudflare !== 0) {
-                log::add('lite_site_monitoring', 'debug', 'checkInternetAccess :. Pas d\'accès à internet détecté');
-                return FALSE;
+        foreach (self::INTERNET_PROBES as $probe) {
+            $ch = curl_init($probe);
+            curl_setopt_array($ch, array(
+                CURLOPT_NOBODY         => true,
+                CURLOPT_RETURNTRANSFER => true,
+                CURLOPT_TIMEOUT        => 5,
+            ));
+            if (curl_exec($ch) !== false) {
+                log::add(self::LOG, 'debug', 'checkInternetAccess :. Accès à Internet confirmé via ' . $probe);
+                return true;
             }
         }
-        
-        log::add('lite_site_monitoring', 'debug', 'checkInternetAccess :. Accès à internet confirmé');
-        return TRUE;
+        log::add(self::LOG, 'debug', 'checkInternetAccess :. Pas d\'accès à Internet détecté');
+        return false;
     }
 
-    public static function getCurl($_url){
-        log::add('lite_site_monitoring', 'debug', 'getCurl :. Lancement');
-        
-        exec("curl -Ik ".$_url, $output);
-        
-        foreach ($output as $search) {
-            if(preg_match("[200]", $search)) { return TRUE; }
-            elseif(preg_match("[302]", $search)) { return TRUE; }
-            else{ return FALSE; }
-        }    
-        
-        return FALSE;
-    }
-    
-    public static function getCurlLatence($_url){
-        log::add('lite_site_monitoring', 'debug', 'getCurlLatence :. Lancement');
-        exec('curl -w "dns_resolution|%{time_namelookup}\ntcp_established|%{time_connect}\nssl_handshake_done|%{time_appconnect}\nTTFB|%{time_starttransfer}\n" -o /dev/null -s '.$_url, $output);
-        $return = array();
-        $cpt = 0;
-        
-        foreach ($output as $search) {
-            $search = str_replace(",", ".", $search); 
-            $tmp = explode("|", $search);
-            $return[$tmp[0]] = $tmp[1];
-            $cpt = $tmp[1] + $cpt;
+    /**
+     * Interroge les URL des équipements en parallèle.
+     *
+     * @param lite_site_monitoring[] $_eqLogics indexés par id
+     * @return array résultats indexés par id d'équipement
+     */
+    private static function probeAll(array $_eqLogics) {
+        $multi = curl_multi_init();
+        $handles = array();
+        $bodies = array();
+
+        foreach ($_eqLogics as $id => $eqLogic) {
+            $bodies[$id] = '';
+            $keepBody = $eqLogic->getConfiguration('keyword') != '';
+            $ch = curl_init($eqLogic->getConfiguration('url'));
+            curl_setopt_array($ch, array(
+                CURLOPT_FOLLOWLOCATION => true,
+                CURLOPT_MAXREDIRS      => 5,
+                CURLOPT_CONNECTTIMEOUT => self::CONNECT_TIMEOUT,
+                CURLOPT_TIMEOUT        => self::REQUEST_TIMEOUT,
+                CURLOPT_ENCODING       => '',
+                CURLOPT_USERAGENT      => 'Jeedom lite_site_monitoring',
+                // Certificats non vérifiés : on surveille la disponibilité, l'expiration est suivie à part
+                CURLOPT_SSL_VERIFYPEER => false,
+                CURLOPT_SSL_VERIFYHOST => 0,
+                CURLOPT_CERTINFO       => true,
+                // Le contenu n'est conservé que si un mot-clé doit y être cherché
+                CURLOPT_WRITEFUNCTION  => function ($ch, $data) use ($id, $keepBody, &$bodies) {
+                    if ($keepBody && strlen($bodies[$id]) < self::MAX_BODY_SIZE) {
+                        $bodies[$id] .= $data;
+                    }
+                    return strlen($data);
+                },
+            ));
+            curl_multi_add_handle($multi, $ch);
+            $handles[$id] = $ch;
         }
-        $return["latence"] = $cpt;
-        return $return;
-    }
-   
-    public static function cron5() {
-        log::add('lite_site_monitoring', 'debug', 'cron5 :. Lancement');
-        $eqLogics = eqLogic::byType('lite_site_monitoring');
-        foreach ($eqLogics as $eqlogic) {
-            if ($eqlogic->getIsEnable() == 1) {
-                self::snif($eqlogic);
+
+        do {
+            $status = curl_multi_exec($multi, $running);
+            if ($running && curl_multi_select($multi, 1.0) === -1) {
+                usleep(100000);
             }
+        } while ($running && $status == CURLM_OK);
+
+        $curlCodes = array();
+        while (($info = curl_multi_info_read($multi)) !== false) {
+            $curlCodes[array_search($info['handle'], $handles, true)] = $info['result'];
         }
+
+        $results = array();
+        foreach ($handles as $id => $ch) {
+            $curlCode = isset($curlCodes[$id]) ? $curlCodes[$id] : CURLE_OPERATION_TIMEOUTED;
+            $results[$id] = self::analyse($_eqLogics[$id], $ch, $curlCode, $bodies[$id]);
+            curl_multi_remove_handle($multi, $ch);
+        }
+        curl_multi_close($multi);
+        return $results;
+    }
+
+    /**
+     * Interprète la réponse d'une requête terminée.
+     */
+    private static function analyse($_eqLogic, $_ch, $_curlCode, $_body) {
+        $httpCode = (int) curl_getinfo($_ch, CURLINFO_RESPONSE_CODE);
+        $result = array(
+            'ok'        => false,
+            'http_code' => $httpCode,
+            'error'     => '',
+            'ssl_days'  => self::sslDaysLeft($_ch),
+        );
+        foreach (self::TIMINGS as $logicalId => $info) {
+            $result[$logicalId] = round(curl_getinfo($_ch, $info) * 1000, 1);
+        }
+
+        $keyword = $_eqLogic->getConfiguration('keyword');
+        if ($_curlCode !== CURLE_OK) {
+            $result['error'] = curl_strerror($_curlCode);
+        } elseif (!$_eqLogic->isExpectedCode($httpCode)) {
+            $result['error'] = sprintf(__('Code HTTP %d inattendu', __FILE__), $httpCode);
+        } elseif ($keyword != '' && stripos($_body, $keyword) === false) {
+            $result['error'] = sprintf(__('Mot-clé « %s » absent de la page', __FILE__), $keyword);
+        } else {
+            $result['ok'] = true;
+        }
+
+        log::add(self::LOG, 'debug', 'analyse :. ' . $_eqLogic->getHumanName() . ' : ' . json_encode($result));
+        return $result;
+    }
+
+    /**
+     * Nombre de jours avant l'expiration du certificat du site, ou null hors HTTPS.
+     */
+    private static function sslDaysLeft($_ch) {
+        $certs = curl_getinfo($_ch, CURLINFO_CERTINFO);
+        if (empty($certs[0]['Expire date'])) {
+            return null;
+        }
+        $expire = strtotime($certs[0]['Expire date']);
+        return $expire === false ? null : (int) floor(($expire - time()) / 86400);
+    }
+
+    /**
+     * Découpe une liste de codes HTTP saisie par l'utilisateur ("200, 301").
+     */
+    private static function parseCodes($_codes) {
+        return preg_split('/[\s,;]+/', trim($_codes), -1, PREG_SPLIT_NO_EMPTY);
     }
 
     /*     * *********************Méthodes d'instance************************* */
-    
 
-    public function postSave() {
-        log::add('lite_site_monitoring', 'debug', 'preSave :. Lancement');
-        
-        $cmd = $this->getCmd(null, 'refresh');
-        if (!is_object($cmd)) {
-            $cmd = new lite_site_monitoringCmd();
-            $cmd->setLogicalId('refresh');
-            $cmd->setName(__('Rafraîchir', __FILE__));
-            $cmd->setIsVisible(1);
-        }
-        $cmd->setType('action');
-        $cmd->setSubType('other');
-        $cmd->setEqLogic_id($this->getId());
-        $cmd->save();
-        
-        $cmd = $this->getCmd(null, 'online');
-        if (!is_object($cmd)) {
-            $cmd = new lite_site_monitoringCmd();
-            $cmd->setLogicalId('online');
-            $cmd->setName(__('OnLine', __FILE__));
-            $cmd->setIsVisible(1);
-        }
-        $cmd->setType('info');
-        $cmd->setSubType('binary');
-        $cmd->setEqLogic_id($this->getId());
-        $cmd->save();
-        
-        $cmd = $this->getCmd(null, 'dns_resolution');
-        if (!is_object($cmd)) {
-            $cmd = new lite_site_monitoringCmd();
-            $cmd->setLogicalId('dns_resolution');
-            $cmd->setName(__('DNS Resolution', __FILE__));
-            $cmd->setIsVisible(0);
-        }
-        $cmd->setType('info');
-        $cmd->setSubType('string');
-        $cmd->setEqLogic_id($this->getId());
-        $cmd->save();
-        
-        $cmd = $this->getCmd(null, 'tcp_established');
-        if (!is_object($cmd)) {
-            $cmd = new lite_site_monitoringCmd();
-            $cmd->setLogicalId('tcp_established');
-            $cmd->setName(__('TCP', __FILE__));
-            $cmd->setIsVisible(0);
-        }
-        $cmd->setType('info');
-        $cmd->setSubType('string');
-        $cmd->setEqLogic_id($this->getId());
-        $cmd->save();
-        
-        $cmd = $this->getCmd(null, 'ssl_handshake_done');
-        if (!is_object($cmd)) {
-            $cmd = new lite_site_monitoringCmd();
-            $cmd->setLogicalId('ssl_handshake_done');
-            $cmd->setName(__('SSL', __FILE__));
-            $cmd->setIsVisible(0);
-        }
-        $cmd->setType('info');
-        $cmd->setSubType('string');
-        $cmd->setEqLogic_id($this->getId());
-        $cmd->save();
-        
-        $cmd = $this->getCmd(null, 'TTFB');
-        if (!is_object($cmd)) {
-            $cmd = new lite_site_monitoringCmd();
-            $cmd->setLogicalId('TTFB');
-            $cmd->setName(__('TTFB', __FILE__));
-            $cmd->setIsVisible(0);
-        }
-        $cmd->setType('info');
-        $cmd->setSubType('string');
-        $cmd->setEqLogic_id($this->getId());
-        $cmd->save();
-        
-        $cmd = $this->getCmd(null, 'latence');
-        if (!is_object($cmd)) {
-            $cmd = new lite_site_monitoringCmd();
-            $cmd->setLogicalId('latence');
-            $cmd->setName(__('Latence', __FILE__));
-            $cmd->setIsVisible(1);
-        }
-        $cmd->setType('info');
-        $cmd->setSubType('string');
-        $cmd->setEqLogic_id($this->getId());
-        $cmd->save();
-        
-        $cmd = $this->getCmd(null, 'last_snif');
-        if (!is_object($cmd)) {
-            $cmd = new lite_site_monitoringCmd();
-            $cmd->setLogicalId('last_snif');
-            $cmd->setName(__('Maj', __FILE__));
-            $cmd->setIsVisible(1);
-        }
-        $cmd->setType('info');
-        $cmd->setSubType('string');
-        $cmd->setEqLogic_id($this->getId());
-        $cmd->save();
+    /**
+     * Nom d'hôte de l'URL surveillée, pour l'affichage.
+     */
+    public function getHost() {
+        $host = parse_url($this->getConfiguration('url'), PHP_URL_HOST);
+        return $host ? $host : $this->getConfiguration('url');
     }
 
-    /*     * **********************Getteur Setteur*************************** */
+    /**
+     * État en ligne connu (1, 0 ou '' si jamais contrôlé), pour l'affichage.
+     */
+    public function getOnlineState() {
+        $cmd = $this->getCmd('info', 'online');
+        return is_object($cmd) ? $cmd->execCmd() : '';
+    }
+
+    /**
+     * Indique si le contrôle de l'équipement doit être lancé cette minute.
+     */
+    public function isDue() {
+        $expression = $this->getConfiguration('autorefresh', self::DEFAULT_CRON);
+        try {
+            $cron = new Cron\CronExpression(checkAndFixCron($expression), new Cron\FieldFactory);
+            return $cron->isDue();
+        } catch (Exception $e) {
+            log::add(self::LOG, 'error', 'Expression cron invalide pour ' . $this->getHumanName() . ' : ' . $expression);
+            return false;
+        }
+    }
+
+    /**
+     * Indique si le code HTTP reçu correspond à ce qui est attendu (2xx ou 3xx par défaut).
+     */
+    public function isExpectedCode($_httpCode) {
+        $expected = self::parseCodes($this->getConfiguration('expectedCode'));
+        if (count($expected) == 0) {
+            return $_httpCode >= 200 && $_httpCode < 400;
+        }
+        return in_array($_httpCode, array_map('intval', $expected), true);
+    }
+
+    /**
+     * Met à jour les commandes à partir du résultat d'un contrôle.
+     * Le site ne passe hors ligne qu'après le nombre d'échecs consécutifs configuré.
+     */
+    public function applyResult(array $_result) {
+        $failures = $_result['ok'] ? 0 : (int) $this->getCache('failures', 0) + 1;
+        $this->setCache('failures', $failures);
+        $threshold = max(1, (int) $this->getConfiguration('failThreshold', 1));
+
+        if ($_result['ok']) {
+            $this->checkAndUpdateCmd('online', 1);
+        } elseif ($failures >= $threshold) {
+            $this->checkAndUpdateCmd('online', 0);
+            log::add(self::LOG, 'info', $this->getHumanName() . ' hors ligne : ' . $_result['error']);
+        } else {
+            log::add(self::LOG, 'info', $this->getHumanName() . ' échec ' . $failures . '/' . $threshold . ' (' . $_result['error'] . '), état conservé');
+        }
+
+        foreach (array_keys(self::TIMINGS) as $logicalId) {
+            $this->checkAndUpdateCmd($logicalId, $_result[$logicalId]);
+        }
+        $this->checkAndUpdateCmd('http_code', $_result['http_code']);
+        $this->checkAndUpdateCmd('error', $_result['error']);
+        if ($_result['ssl_days'] !== null) {
+            $this->checkAndUpdateCmd('ssl_days', $_result['ssl_days']);
+        }
+        $this->checkAndUpdateCmd('last_snif', date('d/m/Y H:i:s'));
+    }
+
+    public function preSave() {
+        $url = trim($this->getConfiguration('url'));
+        if ($url != '') {
+            // Comme curl, on suppose http:// quand le schéma est omis
+            if (strpos($url, '://') === false) {
+                $url = 'http://' . $url;
+            }
+            $scheme = strtolower((string) parse_url($url, PHP_URL_SCHEME));
+            if (!in_array($scheme, array('http', 'https')) || parse_url($url, PHP_URL_HOST) == '') {
+                throw new Exception(__('URL invalide, elle doit être de la forme https://www.exemple.fr :', __FILE__) . ' ' . $url);
+            }
+        }
+        $this->setConfiguration('url', $url);
+
+        if (trim($this->getConfiguration('autorefresh')) == '') {
+            $this->setConfiguration('autorefresh', self::DEFAULT_CRON);
+        }
+        try {
+            new Cron\CronExpression(checkAndFixCron($this->getConfiguration('autorefresh')), new Cron\FieldFactory);
+        } catch (Exception $e) {
+            throw new Exception(__('Expression cron d\'auto-actualisation invalide :', __FILE__) . ' ' . $this->getConfiguration('autorefresh'));
+        }
+
+        foreach (self::parseCodes($this->getConfiguration('expectedCode')) as $code) {
+            if (!preg_match('/^[1-5][0-9]{2}$/', $code)) {
+                throw new Exception(__('Code HTTP attendu invalide :', __FILE__) . ' ' . $code);
+            }
+        }
+
+        $this->setConfiguration('failThreshold', max(1, (int) $this->getConfiguration('failThreshold', 1)));
+    }
+
+    public function postSave() {
+        $commands = array(
+            // logicalId => [nom, type, sous-type, unité, visible, historisée]
+            'refresh'            => array(__('Rafraîchir', __FILE__), 'action', 'other', '', 1, 0),
+            'online'             => array(__('En ligne', __FILE__), 'info', 'binary', '', 1, 1),
+            'latence'            => array(__('Latence', __FILE__), 'info', 'numeric', 'ms', 1, 1),
+            'dns_resolution'     => array(__('Résolution DNS', __FILE__), 'info', 'numeric', 'ms', 0, 0),
+            'tcp_established'    => array(__('Connexion TCP', __FILE__), 'info', 'numeric', 'ms', 0, 0),
+            'ssl_handshake_done' => array(__('Négociation SSL', __FILE__), 'info', 'numeric', 'ms', 0, 0),
+            'TTFB'               => array(__('TTFB', __FILE__), 'info', 'numeric', 'ms', 0, 0),
+            'http_code'          => array(__('Code HTTP', __FILE__), 'info', 'numeric', '', 0, 0),
+            'error'              => array(__('Erreur', __FILE__), 'info', 'string', '', 0, 0),
+            'ssl_days'           => array(__('Expiration SSL', __FILE__), 'info', 'numeric', 'j', 0, 0),
+            'internet'           => array(__('Accès Internet', __FILE__), 'info', 'binary', '', 0, 0),
+            'last_snif'          => array(__('Dernier contrôle', __FILE__), 'info', 'string', '', 1, 0),
+        );
+
+        foreach ($commands as $logicalId => list($name, $type, $subType, $unit, $isVisible, $isHistorized)) {
+            $cmd = $this->getCmd(null, $logicalId);
+            if (!is_object($cmd)) {
+                $cmd = new lite_site_monitoringCmd();
+                $cmd->setLogicalId($logicalId);
+                $cmd->setName($name);
+                $cmd->setIsVisible($isVisible);
+                $cmd->setIsHistorized($isHistorized);
+            }
+            $cmd->setType($type);
+            $cmd->setSubType($subType);
+            $cmd->setUnite($unit);
+            $cmd->setEqLogic_id($this->getId());
+            $cmd->save();
+        }
+    }
+
+    /**
+     * Widget dédié (voyant d'état, latence, certificat), sauf si le widget standard est demandé.
+     */
+    public function toHtml($_version = 'dashboard') {
+        if ($this->getConfiguration('defaultWidget') == 1) {
+            return parent::toHtml($_version);
+        }
+        $replace = $this->preToHtml($_version);
+        if (!is_array($replace)) {
+            return $replace;
+        }
+        $version = jeedom::versionAlias($_version);
+
+        $ids = array();
+        $state = array();
+        foreach ($this->getCmd() as $cmd) {
+            $ids[$cmd->getLogicalId()] = $cmd->getId();
+            if ($cmd->getType() == 'info') {
+                $state[$cmd->getLogicalId()] = $cmd->execCmd();
+            }
+        }
+        $jsonFlags = JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_HEX_AMP;
+        $replace['#lsm_ids#'] = json_encode($ids, $jsonFlags);
+        $replace['#lsm_state#'] = json_encode($state, $jsonFlags);
+        $replace['#lsm_url#'] = htmlspecialchars($this->getConfiguration('url'), ENT_QUOTES);
+        $replace['#lsm_host#'] = htmlspecialchars($this->getHost(), ENT_QUOTES);
+
+        $html = template_replace($replace, getTemplate('core', $version, 'lite_site_monitoring', self::LOG));
+        return $this->postToHtml($_version, $html);
+    }
 }
 
 class lite_site_monitoringCmd extends cmd {
-    /*     * *************************Attributs****************************** */
-    
-    /*
-      public static $_widgetPossibility = array();
-    */
-    
-    /*     * ***********************Methode static*************************** */
 
-
-    /*     * *********************Methode d'instance************************* */
-
-    /*
-     * Non obligatoire permet de demander de ne pas supprimer les commandes même si elles ne sont pas dans la nouvelle configuration de l'équipement envoyé en JS
-      public function dontRemoveCmd() {
-      return true;
-      }
-     */
-
-  // Exécution d'une commande  
-     public function execute($_options = array()) {
-        $eqlogic = $this->getEqLogic();
-        switch ($this->getLogicalId()) { //vérifie le logicalid de la commande 			
-            case 'refresh': // LogicalId de la commande rafraîchir que l’on a créé dans la méthode Postsave 
-                log::add('lite_site_monitoring', 'debug', 'Commande :. Lancement : #ID#' . $eqlogic->getId());
-                lite_site_monitoring::snif($eqlogic);
-                break;
+    public function execute($_options = array()) {
+        if ($this->getLogicalId() == 'refresh') {
+            $eqLogic = $this->getEqLogic();
+            log::add(lite_site_monitoring::LOG, 'debug', 'Commande refresh :. #' . $eqLogic->getId());
+            lite_site_monitoring::checkAll(array($eqLogic));
         }
-     }
-
-    /*     * **********************Getteur Setteur*************************** */
+    }
 }
-
-
