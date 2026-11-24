@@ -400,7 +400,9 @@ class lite_site_monitoring extends eqLogic {
         $replace['#lsm_url#'] = htmlspecialchars($this->getConfiguration('url'), ENT_QUOTES);
         $replace['#lsm_host#'] = htmlspecialchars($this->getHost(), ENT_QUOTES);
 
-        $html = template_replace($replace, getTemplate('core', $version, 'lite_site_monitoring', self::LOG));
+        // getTemplate() ne traduit pas : les {{textes}} du template passent par translate::exec()
+        $template = translate::exec(getTemplate('core', $version, 'lite_site_monitoring', self::LOG), 'plugins/lite_site_monitoring/core/template/' . $version . '/lite_site_monitoring.html');
+        $html = template_replace($replace, $template);
         return $this->postToHtml($_version, $html);
     }
 }
