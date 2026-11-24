@@ -20,8 +20,15 @@
   background: #d64545;
   box-shadow: 0 0 0 3px rgba(214, 69, 69, .2);
 }
+/* Le core limite le nom à 130px sans le centrer : la carte s'élargit avec le libellé de l'objet */
+div.eqLogicDisplayCard.lsm-card > span.name strong {
+  margin-left: auto;
+  margin-right: auto;
+}
 .lsm-card .lsm-card-host {
   display: block;
+  max-width: 150px;
+  margin: 4px auto 0;
   font-size: .8em;
   opacity: .6;
   overflow: hidden;
