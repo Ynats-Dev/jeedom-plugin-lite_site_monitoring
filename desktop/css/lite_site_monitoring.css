@@ -45,9 +45,9 @@
   margin-bottom: 14px;
 }
 .lsm-panel-head img {
-  width: 56px;
-  height: 56px;
-  border-radius: 12px;
+  flex: 0 0 auto;
+  width: 52px;
+  height: auto;
 }
 .lsm-panel-pill {
   --lsm-color: #8a939b;

@@ -41,6 +41,12 @@ require_once dirname(__FILE__) . '/../../../core/php/core.inc.php';
         log::add('lite_site_monitoring', 'error', $eqLogic->getHumanName() . ' : ' . $e->getMessage());
       }
     }
+    // Premier contrôle immédiat, pour ne pas afficher les anciennes valeurs jusqu'au prochain cron
+    try {
+      lite_site_monitoring::checkAll(eqLogic::byType('lite_site_monitoring', true));
+    } catch (Exception $e) {
+      log::add('lite_site_monitoring', 'error', 'Contrôle après mise à jour : ' . $e->getMessage());
+    }
   }
 
 // Fonction exécutée automatiquement après la suppression du plugin
